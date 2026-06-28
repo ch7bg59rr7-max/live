@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>لوحة kooratv</title>
+    <style>
+      body{font-family:system-ui,Segoe UI,Arial; margin:0}
+      header{display:flex;gap:16px;align-items:center;padding:12px 20px;background:#0b5c80;color:#fff}
+      nav a{color:#fff;text-decoration:none;margin-inline-end:12px;cursor:pointer}
+      .container{padding:20px}
+      table{border-collapse: collapse; width:100%}
+      td,th{border:1px solid #ddd;padding:6px}
+      input,button,select{padding:6px}
+      .row{display:flex;gap:8px;flex-wrap:wrap}
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>لوحة kooratv</strong>
+      <nav>
+        <a data-view="channels">القنوات</a>
+        <a data-view="import">استيراد M3U</a>
+        <a data-view="users">المستخدمون والأدوار</a>
+      </nav>
+    </header>
+    <div id="root" class="container"></div>
+
+    <script type="module">
+      import React,{useEffect,useState} from 'react';
+      import { createRoot } from 'react-dom/client';
+
+      const api = {
+        async getChannels(){ const r=await fetch('/api/channels'); return r.json(); },
+        async addChannel(p){ const r=await fetch('/api/channels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); return r.json(); },
+        async updateChannel(id,p){ const r=await fetch('/api/channels/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); return r.json(); },
+        async addSource(id,p){ const r=await fetch(`/api/channels/${id}/sources`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); return r.json(); },
+        async updateSource(id,p){ const r=await fetch('/api/sources/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}); return r.json(); },
+        async previewM3U(text){ const r=await fetch('/api/import/m3u/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({m3uText:text})}); return r.json();},
+        async commitM3U(items){ const r=await fetch('/api/import/m3u/commit-db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items})}); return r.json(); },
+
+        async listUsers(){ const r=await fetch('/api/admin/users'); return r.json(); },
+        async listRoles(){ const r=await fetch('/api/admin/roles'); return r.json(); },
+        async setUserRole(userId, roleId){ const r=await fetch('/api/admin/users/'+userId+'/role',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roleId})}); return r.json(); }
+      };
+
+      function ChannelsView(){
+        const [rows,setRows]=useState([]), [name,setName]=useState(''), [logo,setLogo]=useState('');
+        async function load(){ setRows(await api.getChannels()); }
+        useEffect(()=>{ load(); },[]);
+        async function add(){ if(!name) return; await api.addChannel({name,logo_url:logo}); setName(''); setLogo(''); load(); }
+        async function toggle(ch){ await api.updateChannel(ch.id,{is_active:!ch.is_active}); load(); }
+        async function addSrc(ch){
+          const url=prompt('رابط m3u8'); if(!url) return;
+          await api.addSource(ch.id,{source_url:url,kind:'m3u8',priority:1}); load();
+        }
+        return (
+          React.createElement('div',null,
+            React.createElement('h2',null,'القنوات'),
+            React.createElement('div',{className:'row'},
+              React.createElement('input',{placeholder:'اسم القناة',value:name,onChange:e=>setName(e.target.value)}),
+              React.createElement('input',{placeholder:'شعار (URL)',value:logo,onChange:e=>setLogo(e.target.value)}),
+              React.createElement('button',{onClick:add},'إضافة')
+            ),
+            React.createElement('table',null,
+              React.createElement('thead',null, React.createElement('tr',null,
+                React.createElement('th',null,'الاسم'),
+                React.createElement('th',null,'الحالة'),
+                React.createElement('th',null,'الشعار'),
+                React.createElement('th',null,'المصادر'),
+                React.createElement('th',null,'إجراءات')
+              )),
+              React.createElement('tbody',null,
+                rows.map(ch=>React.createElement('tr',{key:ch.id},
+                  React.createElement('td',null,ch.name),
+                  React.createElement('td',null, ch.is_active?'نشطة':'معطلة'),
+                  React.createElement('td',null, ch.logo_url?React.createElement('img',{src:ch.logo_url,style:{height:24}}):'—'),
+                  React.createElement('td',null,
+                    Array.isArray(ch.sources)?ch.sources.map(s=>React.createElement('div',{key:s.id,style:{direction:'ltr'}}, `${s.kind} [p${s.priority}] ${s.status} – ${s.source_url}`)):'—'
+                  ),
+                  React.createElement('td',null,
+                    React.createElement('button',{onClick:()=>toggle(ch)}, ch.is_active?'تعطيل':'تفعيل'),
+                    ' ',
+                    React.createElement('button',{onClick:()=>addSrc(ch)},'إضافة مصدر')
+                  )
+                ))
+              )
+            )
+          )
+        )
+      }
+
+      function ImportView(){
+        const [text,setText]=useState(''), [preview,setPreview]=useState([]), [sel,setSel]=useState({});
+        async function doPrev(){ setPreview(await api.previewM3U(text)); }
+        async function commit(){
+          const items=preview.filter((_,i)=>sel[i]);
+          const r=await api.commitM3U(items);
+          alert('تم الاعتماد: '+r.created); setPreview([]); setSel({});
+        }
+        return (
+          React.createElement('div',null,
+            React.createElement('h2',null,'استيراد M3U'),
+            React.createElement('textarea',{rows:10,style:{width:'100%'},value:text,onChange:e=>setText(e.target.value)}),
+            React.createElement('div',null,
+              React.createElement('button',{onClick:doPrev},'معاينة'),
+              React.createElement('button',{onClick:commit,style:{marginInlineStart:8}},'اعتماد المحدد')
+            ),
+            React.createElement('table',{style:{marginTop:12}},
+              React.createElement('thead',null,React.createElement('tr',null,
+                React.createElement('th',null,'اختر'),React.createElement('th',null,'الاسم'),React.createElement('th',null,'المجموعة'),React.createElement('th',null,'الرابط')
+              )),
+              React.createElement('tbody',null,
+                preview.map((it,i)=>React.createElement('tr',{key:i},
+                  React.createElement('td',null,React.createElement('input',{type:'checkbox',checked:!!sel[i],onChange:e=>setSel({...sel,[i]:e.target.checked})})),
+                  React.createElement('td',null,it.name),
+                  React.createElement('td',null,it.group||''),
+                  React.createElement('td',{style:{direction:'ltr'}},it.url)
+                ))
+              )
+            )
+          )
+        )
+      }
+
+      function UsersRolesView(){
+        const [users,setUsers]=useState([]), [roles,setRoles]=useState([]);
+        useEffect(()=>{ (async()=>{ setUsers(await (await fetch('/api/admin/users')).json()); setRoles(await (await fetch('/api/admin/roles')).json()); })(); },[]);
+        async function setRole(u){
+          const roleId = prompt('أدخل role_id للمستخدم '+u.email); if(!roleId) return;
+          await fetch('/api/admin/users/'+u.id+'/role',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({roleId:Number(roleId)})});
+          alert('تم التعيين'); location.reload();
+        }
+        return (
+          React.createElement('div',null,
+            React.createElement('h2',null,'المستخدمون والأدوار'),
+            React.createElement('h3',null,'الأدوار'), React.createElement('pre',null, JSON.stringify(roles,null,2)),
+            React.createElement('h3',null,'المستخدمون'),
+            React.createElement('table',null,
+              React.createElement('thead',null,React.createElement('tr',null,
+                React.createElement('th',null,'البريد'),React.createElement('th',null,'الاسم'),React.createElement('th',null,'نشط'),React.createElement('th',null,'أدوار'),React.createElement('th',null,'إجراءات')
+              )),
+              React.createElement('tbody',null,
+                users.map(u=>React.createElement('tr',{key:u.id},
+                  React.createElement('td',null,u.email),
+                  React.createElement('td',null,u.display_name||''),
+                  React.createElement('td',null,u.is_active?'نعم':'لا'),
+                  React.createElement('td',null, (u.roles||[]).map(r=>r.name).join(', ')),
+                  React.createElement('td',null, React.createElement('button',{onClick:()=>setRole(u)},'تعيين دور'))
+                ))
+              )
+            )
+          )
+        )
+      }
+
+      function App(){
+        const [view,setView]=useState('channels');
+        useEffect(()=>{
+          document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>setView(a.dataset.view)));
+        },[]);
+        return view==='channels'?React.createElement(ChannelsView)
+          : view==='import'?React.createElement(ImportView)
+          : React.createElement(UsersRolesView);
+      }
+
+      createRoot(document.getElementById('root')).render(React.createElement(App));
+    </script>
+  </body>
+</html>

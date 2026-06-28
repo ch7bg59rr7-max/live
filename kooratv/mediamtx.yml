@@ -1,0 +1,6 @@
+
+paths:
+  all:
+    hls: yes
+    hlsVariant: lowLatency
+    hlsSegmentDuration: 1s

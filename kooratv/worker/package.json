@@ -1,0 +1,10 @@
+{
+  "name": "kooratv-worker",
+  "version": "0.2.0",
+  "type": "module",
+  "main": "checker.js",
+  "dependencies": {
+    "axios": "^1.7.2",
+    "dayjs": "^1.11.11"
+  }
+}

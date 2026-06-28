@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>kooratv</title></head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import React,{useEffect,useRef,useState} from 'react';
+      import { createRoot } from 'react-dom/client';
+      function Player({src}) {
+        const ref = useRef();
+        useEffect(()=>{
+          const video = ref.current;
+          const canNative = video.canPlayType && video.canPlayType('application/vnd.apple.mpegurl');
+          if (canNative) { video.src = src; return; }
+          import('hls.js').then(({default:Hls})=>{
+            if (Hls.isSupported()) {
+              const hls = new Hls({ lowLatencyMode: true });
+              hls.loadSource(src); hls.attachMedia(video);
+            } else { video.src = src; }
+          });
+        },[src]);
+        return React.createElement('video',{ref,controls:true,style:{width:'100%',background:'#000'}})
+      }
+      function App(){
+        const [url,setUrl] = useState('');
+        return React.createElement('div',{style:{padding:24}},
+          React.createElement('h1',null,'kooratv - اختبار المشغّل'),
+          React.createElement('input',{style:{width:'100%'} ,placeholder:'ضع رابط m3u8 موقعاً (JWT)',value:url,onChange:e=>setUrl(e.target.value)}),
+          url ? React.createElement(Player,{src:url}) : null
+        )
+      }
+      createRoot(document.getElementById('root')).render(React.createElement(App));
+    </script>
+  </body>
+</html>
